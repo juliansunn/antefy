@@ -164,16 +164,39 @@ export const getSavedShows = (offset = 0, limit = 50) =>
 export const getFollowedArtists = (after, limit = 50) =>
 	spotifyFetch('/me/following', { query: { type: 'artist', after, limit } });
 
-/** Returns a boolean per URI. Accepts track or episode URIs. */
+export const getSavedEpisodes = (offset = 0, limit = 50) =>
+	spotifyFetch('/me/episodes', { query: { offset, limit, market: 'from_token' } });
+
+export const getSavedAudiobooks = (offset = 0, limit = 50) =>
+	spotifyFetch('/me/audiobooks', { query: { offset, limit } });
+
+/** Legacy (pre-2026) per-type library path for a Spotify URI: spotify:show:… -> 'shows'. */
+const legacyLibraryPath = (uri) => `${String(uri).split(':')[1] || 'track'}s`;
+
+/** Split URIs by type so each legacy request targets one per-type endpoint. */
+function byType(uris) {
+	const groups = new Map();
+	for (const uri of uris) {
+		const path = legacyLibraryPath(uri);
+		groups.set(path, [...(groups.get(path) ?? []), uri]);
+	}
+	return [...groups.entries()];
+}
+
+/** Returns a boolean per URI. Accepts track, episode, album, show or audiobook URIs. */
 export async function libraryContains(uris) {
 	const results = [];
 	for (const group of chunk(uris, 40)) {
 		const res = await withFallback(
 			'library-contains',
 			() => spotifyFetch('/me/library/contains', { query: { uris: group.join(',') } }),
-			() => {
-				const type = group[0]?.split(':')[1] === 'episode' ? 'episodes' : 'tracks';
-				return spotifyFetch(`/me/${type}/contains`, { query: { ids: group.map(idFromUri).join(',') } });
+			async () => {
+				const flags = new Map();
+				for (const [path, list] of byType(group)) {
+					const r = await spotifyFetch(`/me/${path}/contains`, { query: { ids: list.map(idFromUri).join(',') } });
+					list.forEach((u, i) => flags.set(u, Boolean(r?.[i])));
+				}
+				return group.map((u) => flags.get(u) ?? false);
 			}
 		);
 		results.push(...(Array.isArray(res) ? res : group.map(() => false)));
@@ -181,21 +204,20 @@ export async function libraryContains(uris) {
 	return results;
 }
 
-export function saveToLibrary(uris) {
+function writeLibrary(method, uris) {
 	return withFallback(
 		'library-write',
-		() => spotifyFetch('/me/library', { method: 'PUT', query: { uris: uris.join(',') } }),
-		() => spotifyFetch('/me/tracks', { method: 'PUT', body: { ids: uris.map(idFromUri) } })
+		() => spotifyFetch('/me/library', { method, query: { uris: uris.join(',') } }),
+		async () => {
+			for (const [path, list] of byType(uris)) {
+				await spotifyFetch(`/me/${path}`, { method, body: { ids: list.map(idFromUri) } });
+			}
+		}
 	);
 }
 
-export function removeFromLibrary(uris) {
-	return withFallback(
-		'library-write',
-		() => spotifyFetch('/me/library', { method: 'DELETE', query: { uris: uris.join(',') } }),
-		() => spotifyFetch('/me/tracks', { method: 'DELETE', body: { ids: uris.map(idFromUri) } })
-	);
-}
+export const saveToLibrary = (uris) => writeLibrary('PUT', uris);
+export const removeFromLibrary = (uris) => writeLibrary('DELETE', uris);
 
 // ---------------------------------------------------------------------------
 // Catalog
@@ -261,10 +283,17 @@ export async function getArtistTopTracks(artist) {
 export const getShow = (id) => spotifyFetch(`/shows/${id}`, { query: { market: 'from_token' } });
 export const getShowEpisodes = (id, offset = 0, limit = 50) =>
 	spotifyFetch(`/shows/${id}/episodes`, { query: { offset, limit, market: 'from_token' } });
+export const getEpisode = (id) => spotifyFetch(`/episodes/${id}`, { query: { market: 'from_token' } });
+
+export const getAudiobook = (id) => spotifyFetch(`/audiobooks/${id}`, { query: { market: 'from_token' } });
+export const getAudiobookChapters = (id, offset = 0, limit = 50) =>
+	spotifyFetch(`/audiobooks/${id}/chapters`, { query: { offset, limit, market: 'from_token' } });
 
 /** Dev Mode apps are capped at limit=10 per type; keep requests within that. */
 export const search = (q, types = ['track', 'artist', 'album', 'playlist', 'show'], { limit = 10, offset = 0 } = {}) =>
-	spotifyFetch('/search', { query: { q, type: types.join(','), limit: Math.min(limit, 10), offset } });
+	spotifyFetch('/search', {
+		query: { q, type: types.join(','), limit: Math.min(limit, 10), offset, market: 'from_token' }
+	});
 
 // ---------------------------------------------------------------------------
 // Playlists (write)
@@ -288,6 +317,26 @@ export async function addTracksToPlaylist(playlistId, uris) {
 			() => spotifyFetch(`/playlists/${playlistId}/tracks`, { method: 'POST', body: { uris: group } })
 		);
 	}
+}
+
+/** Remove every occurrence of the given URIs. The body key `tracks` was renamed `items` in 2026. */
+export function removeFromPlaylist(playlistId, uris, snapshotId) {
+	const entries = uris.map((uri) => ({ uri }));
+	const snapshot = snapshotId ? { snapshot_id: snapshotId } : {};
+	return withFallback(
+		'playlist-remove',
+		() => spotifyFetch(`/playlists/${playlistId}/items`, { method: 'DELETE', body: { items: entries, ...snapshot } }),
+		() => spotifyFetch(`/playlists/${playlistId}/tracks`, { method: 'DELETE', body: { tracks: entries, ...snapshot } })
+	);
+}
+
+/** @param {{ name?: string, description?: string, isPublic?: boolean }} details */
+export function updatePlaylistDetails(playlistId, { name, description, isPublic }) {
+	const body = {};
+	if (name !== undefined) body.name = name;
+	if (description !== undefined) body.description = description;
+	if (isPublic !== undefined) body.public = isPublic;
+	return spotifyFetch(`/playlists/${playlistId}`, { method: 'PUT', body });
 }
 
 // ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import Cover from '@/components/ui/Cover';
 import PlayButton from './PlayButton';
+import QueueButton from './QueueButton';
 import { cn } from '@/lib/cn';
 import { cleanDescription, formatDate, formatLongDuration } from '@/lib/format';
 import { useNowPlaying } from '@/hooks/usePlayback';
@@ -51,6 +52,13 @@ function EpisodeRow({ episode, onPlay }) {
 						</span>
 					)}
 					{played && <CheckCircle2 className="h-4 w-4 text-accent" aria-label="Played" />}
+					{playable && episode.uri?.startsWith('spotify:episode:') && (
+						<QueueButton
+							uri={episode.uri}
+							name={episode.name}
+							className="ml-auto opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+						/>
+					)}
 				</div>
 			</div>
 		</article>

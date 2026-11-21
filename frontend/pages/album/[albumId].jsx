@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import CollectionHeader, { ActionBar, Dot } from '@/components/media/CollectionHeader';
 import PlayButton from '@/components/media/PlayButton';
+import SaveButton from '@/components/media/SaveButton';
 import Shelf from '@/components/media/Shelf';
 import TrackList, { TrackListSkeleton } from '@/components/media/TrackList';
 import { ErrorState } from '@/components/ui/States';
@@ -78,6 +79,7 @@ export default function AlbumPage() {
 			{a && (
 				<ActionBar>
 					<PlayButton size="lg" playing={isCurrent && now.isPlaying} onClick={() => playFrom({ contextUri: a.uri })} />
+					<SaveButton uri={a.uri} name={a.name} />
 				</ActionBar>
 			)}
 			{album.isLoading ? (

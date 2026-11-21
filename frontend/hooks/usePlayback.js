@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 import * as spotify from '@/lib/spotify';
 import { useUiStore } from '@/lib/store';
-import { activateWebPlayer } from '@/lib/webPlayer';
+import { activateWebPlayer, runLocally } from '@/lib/webPlayer';
 
 export const PLAYBACK_KEY = ['playback'];
 
@@ -105,6 +105,12 @@ export function usePlayerControls() {
 	const syncTimer = useRef(null);
 
 	const getState = () => queryClient.getQueryData(PLAYBACK_KEY);
+	/** Use the in-browser SDK when it's the device playing; otherwise the Web API. */
+	const viaSdk = (command, args, api) => {
+		const webId = useUiStore.getState().webPlayer.deviceId;
+		const local = webId && getState()?.device?.id === webId ? runLocally(command, ...args) : null;
+		return local ? local.catch(api) : api();
+	};
 	/**
 	 * setQueryData resets dataUpdatedAt (the interpolation base), so roll
 	 * progress forward to "now" before applying the change.
@@ -162,7 +168,12 @@ export function usePlayerControls() {
 	};
 
 	const playMutation = useMutation({
-		mutationFn: (opts) => withDevice((deviceId) => spotify.play({ ...opts, deviceId: opts?.deviceId ?? deviceId })),
+		mutationFn: (opts) => {
+			const api = () => withDevice((deviceId) => spotify.play({ ...opts, deviceId: opts?.deviceId ?? deviceId }));
+			// A bare "resume" can go straight to the local player.
+			const resumeOnly = !opts || Object.keys(opts).length === 0;
+			return resumeOnly ? viaSdk('resume', [], api) : api();
+		},
 		onMutate: () => {
 			// Must run inside the click's user-activation window or the browser blocks audio.
 			activateWebPlayer();
@@ -176,7 +187,7 @@ export function usePlayerControls() {
 	});
 
 	const pauseMutation = useMutation({
-		mutationFn: () => spotify.pause(),
+		mutationFn: () => viaSdk('pause', [], () => spotify.pause()),
 		onMutate: () => patch((s) => ({ ...s, is_playing: false })),
 		onError: (e, v, prev) => {
 			rollback(e, v, prev);
@@ -187,13 +198,15 @@ export function usePlayerControls() {
 
 	const skipMutation = useMutation({
 		mutationFn: (direction) =>
-			withDevice((deviceId) => (direction > 0 ? spotify.skipNext(deviceId) : spotify.skipPrevious(deviceId))),
+			viaSdk(direction > 0 ? 'nextTrack' : 'previousTrack', [], () =>
+				withDevice((deviceId) => (direction > 0 ? spotify.skipNext(deviceId) : spotify.skipPrevious(deviceId)))
+			),
 		onError: (e) => toast.error(spotify.describeError(e)),
 		onSettled: () => resync(500)
 	});
 
 	const seekMutation = useMutation({
-		mutationFn: (ms) => spotify.seek(ms),
+		mutationFn: (ms) => viaSdk('seek', [Math.max(0, Math.round(ms))], () => spotify.seek(ms)),
 		onMutate: (ms) => patch((s) => ({ ...s, progress_ms: ms })),
 		onError: (e, v, prev) => {
 			rollback(e, v, prev);
@@ -265,6 +278,22 @@ export function usePlayerControls() {
 		transfer: transferMutation.mutate,
 		isPending: playMutation.isPending || pauseMutation.isPending || skipMutation.isPending
 	};
+}
+
+/**
+ * Play an episode (or audiobook chapter) from where you left off. With a show
+ * context the next episode follows it; otherwise it plays on its own.
+ */
+export function usePlayEpisode() {
+	const playFrom = usePlayFrom();
+	return useCallback(
+		(ep, contextUri = ep?.show?.uri) => {
+			const resume = ep.resume_point;
+			const positionMs = !resume?.fully_played ? resume?.resume_position_ms : 0;
+			playFrom(contextUri ? { contextUri } : { uris: [ep.uri] }, ep, { positionMs });
+		},
+		[playFrom]
+	);
 }
 
 function interpolatedProgress(s, updatedAt) {

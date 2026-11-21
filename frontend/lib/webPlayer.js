@@ -1,4 +1,5 @@
 import { getAccessToken } from '@/lib/spotify';
+import { toast } from 'sonner';
 import { useUiStore } from '@/lib/store';
 
 /**
@@ -51,6 +52,8 @@ export function startWebPlayer() {
 			const p = new Spotify.Player({
 				name: WEB_PLAYER_NAME,
 				volume: 0.6,
+				// Lock-screen / OS media controls and hardware media keys.
+				enableMediaSession: true,
 				getOAuthToken: (cb) => {
 					getAccessToken().then((t) => t && cb(t));
 				}
@@ -69,7 +72,25 @@ export function startWebPlayer() {
 			p.addListener('account_error', ({ message }) =>
 				setState({ status: 'premium-required', deviceId: null, message })
 			);
-			p.addListener('playback_error', ({ message }) => console.warn('[web player] playback error:', message));
+			p.addListener('playback_error', ({ message }) => {
+				console.warn('[web player] playback error:', message);
+				toast.error('Couldn’t play that in this browser', { id: 'web-playback-error', description: message || undefined });
+			});
+			// Browsers block audio that starts without a click (e.g. after a transfer from another device).
+			p.addListener('autoplay_failed', () => {
+				toast('Your browser blocked playback', {
+					id: 'web-autoplay',
+					description: 'Click play to start listening here.',
+					duration: 15000,
+					action: {
+						label: 'Play',
+						onClick: () => {
+							p.activateElement?.();
+							p.resume();
+						}
+					}
+				});
+			});
 
 			player = p;
 			return p.connect().then((ok) => {
@@ -98,6 +119,18 @@ export function activateWebPlayer() {
 	} catch {
 		/* older SDKs don't have activateElement */
 	}
+}
+
+/**
+ * Run a command on the local SDK player when this browser is the active
+ * device: no network round-trip, so it responds instantly. Returns null when
+ * the web player isn't available, so callers fall back to the Web API.
+ * @param {'pause'|'resume'|'togglePlay'|'nextTrack'|'previousTrack'|'seek'} command
+ */
+export function runLocally(command, ...args) {
+	const { deviceId, status } = useUiStore.getState().webPlayer;
+	if (!player || status !== 'ready' || !deviceId) return null;
+	return player[command](...args);
 }
 
 export function stopWebPlayer() {

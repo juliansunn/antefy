@@ -223,7 +223,7 @@ export default function QueuePanel() {
 				>
 					<div className="flex items-center justify-between border-b border-line px-4 py-3">
 						<Dialog.Title className="font-bold">Queue</Dialog.Title>
-						<label className="ml-auto mr-2 flex cursor-pointer items-center gap-2 text-xs font-semibold text-muted" title="When the queue runs out, add a similar song or the next episode">
+						<label className="ml-auto mr-2 flex cursor-pointer items-center gap-2 text-xs font-semibold text-muted" title="When playback runs out, play a similar song or the next episode">
 							Autoplay
 							<button
 								type="button"

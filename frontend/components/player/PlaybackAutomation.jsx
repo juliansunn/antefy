@@ -2,12 +2,12 @@ import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { pickNext } from '@/lib/autoplay';
-import * as spotify from '@/lib/spotify';
 import { useUiStore } from '@/lib/store';
-import { usePlaybackState, usePlayerControls } from '@/hooks/usePlayback';
+import { PLAYBACK_KEY, usePlaybackState, usePlayerControls } from '@/hooks/usePlayback';
 
-/** How long before the end of a track/episode autoplay checks the queue. */
-const AUTOPLAY_LEAD_MS = 25000;
+/** Arm autoplay this long before the end, and re-check playback this long after it. */
+const ARM_LEAD_MS = 4000;
+const RECHECK_AFTER_END_MS = 1500;
 
 function useRemaining() {
 	const { data, dataUpdatedAt } = usePlaybackState();
@@ -25,44 +25,83 @@ function useRemaining() {
 const remainingMs = (item, progress, updatedAt) => (item?.duration_ms ?? 0) - (progress + (Date.now() - updatedAt));
 
 /**
- * Autoplay: shortly before the current track or episode ends, if Spotify has
- * nothing queued after it, queue the top suggestion (song radio / next
- * unplayed episode). Runs at most once per item.
+ * Did playback stop because `armed` reached its end (not a manual pause, a
+ * skip, or Spotify's own autoplay starting something)? Spotify reports a
+ * finished item as paused at position 0 (or at the very end), or with no
+ * item at all.
+ */
+export function endedNaturally(armed, { item, playing, progress }, now = Date.now()) {
+	if (!armed || playing || now < armed.endsAt - 1000) return false;
+	if (!item) return true;
+	// Some contexts rewind to their first item, paused at 0, when they finish.
+	if (item.id !== armed.id) return progress < 1500;
+	return progress < 1500 || progress >= (item.duration_ms ?? 0) - 1000;
+}
+
+/**
+ * Autoplay: when the current track or episode finishes and nothing else
+ * starts (no queue, end of context, Spotify's own autoplay off), play the top
+ * suggestion: the next song-radio pick or the newest unplayed episode of the
+ * same podcast. Acting after the end, instead of queueing ahead of time,
+ * means it never stacks on top of Spotify's autoplay.
  */
 function useAutoplay() {
 	const queryClient = useQueryClient();
 	const enabled = useUiStore((s) => s.autoplay);
-	const { item, playing, repeat, progress, updatedAt } = useRemaining();
-	const handled = useRef(new Set());
-	const queued = useRef(new Set());
+	const state = useRemaining();
+	const { item, playing, repeat, progress, updatedAt } = state;
+	const { play } = usePlayerControls();
+	const armed = useRef(null);
+	const played = useRef(new Set());
 
+	// While playing, arm shortly before the end and force a fresh read just after it.
 	useEffect(() => {
-		if (!enabled || !playing || !item?.id || repeat !== 'off' || handled.current.has(item.id)) return undefined;
-		const delay = Math.max(0, remainingMs(item, progress, updatedAt) - AUTOPLAY_LEAD_MS);
-		const t = setTimeout(async () => {
-			if (handled.current.has(item.id)) return;
-			handled.current.add(item.id);
-			try {
-				const queue = await spotify.getQueue();
-				if ((queue?.queue ?? []).some(Boolean)) return;
-				const next = await pickNext(item, queryClient, queued.current);
-				if (!next) return;
-				await spotify.addToQueue(next.uri);
-				queued.current.add(next.uri);
-				queryClient.invalidateQueries({ queryKey: ['queue'] });
-				toast(`Up next: ${next.name}`, { description: 'Autoplay queued something similar.', id: 'autoplay' });
-			} catch (e) {
-				console.warn('[autoplay]', e);
-			}
-		}, delay);
-		return () => clearTimeout(t);
+		if (!enabled || !playing || !item?.id || repeat !== 'off') return undefined;
+		const remaining = remainingMs(item, progress, updatedAt);
+		const arm = setTimeout(() => {
+			armed.current = { id: item.id, item, endsAt: Date.now() + Math.max(0, remainingMs(item, progress, updatedAt)) };
+		}, Math.max(0, remaining - ARM_LEAD_MS));
+		const recheck = setTimeout(
+			() => queryClient.invalidateQueries({ queryKey: PLAYBACK_KEY }),
+			Math.max(0, remaining + RECHECK_AFTER_END_MS)
+		);
+		return () => {
+			clearTimeout(arm);
+			clearTimeout(recheck);
+		};
 	}, [enabled, playing, item, repeat, progress, updatedAt, queryClient]);
+
+	// On each playback update: if the armed item ended and nothing followed, continue.
+	useEffect(() => {
+		const current = armed.current;
+		if (!current) return;
+		if (playing && item?.id !== current.id) {
+			armed.current = null; // something else started (queue, context, Spotify autoplay)
+			return;
+		}
+		if (!enabled || !endedNaturally(current, state)) return;
+		armed.current = null;
+		// The sleep timer just paused on purpose.
+		if (Date.now() - useUiStore.getState().sleptAt < 60000) return;
+		pickNext(current.item, queryClient, played.current)
+			.then((next) => {
+				if (!next) return;
+				played.current.add(next.uri);
+				const resume = next.resume_point;
+				play({ uris: [next.uri], positionMs: resume && !resume.fully_played ? resume.resume_position_ms : 0 });
+				toast(`Autoplay: ${next.name}`, { id: 'autoplay', description: 'Playing something similar.' });
+			})
+			.catch((e) => console.warn('[autoplay]', e));
+		// `state` is the same data as the fields listed.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [enabled, item, playing, progress, updatedAt, queryClient, play]);
 }
 
 /** Sleep timer: pause after N minutes, or when the current track/episode ends. */
 function useSleepTimer() {
 	const timer = useUiStore((s) => s.sleepTimer);
 	const setTimer = useUiStore((s) => s.setSleepTimer);
+	const setSleptAt = useUiStore((s) => s.setSleptAt);
 	const { pause } = usePlayerControls();
 	const { item, playing, progress, updatedAt } = useRemaining();
 
@@ -70,6 +109,7 @@ function useSleepTimer() {
 	useEffect(() => {
 		fire.current = () => {
 			setTimer(null);
+			setSleptAt(Date.now());
 			pause();
 			toast('Sleep timer: playback paused', { id: 'sleep-timer' });
 		};

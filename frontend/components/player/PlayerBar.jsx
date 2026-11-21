@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { Pause, Play, Radio, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from 'lucide-react';
+import * as Popover from '@radix-ui/react-popover';
+import { MoreHorizontal, Pause, Play, Radio, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from 'lucide-react';
 import Cover from '@/components/ui/Cover';
 import IconButton from '@/components/ui/IconButton';
 import ArtistLinks from '@/components/media/ArtistLinks';
@@ -15,6 +16,7 @@ import SleepTimer from './SleepTimer';
 import { cn } from '@/lib/cn';
 import { usePlaybackState, usePlayerControls, useProgress } from '@/hooks/usePlayback';
 import { useSavedStatus } from '@/hooks/useLibrary';
+import { useUiStore } from '@/lib/store';
 
 const NEXT_REPEAT = { off: 'context', context: 'track', track: 'off' };
 
@@ -65,6 +67,44 @@ function NowPlaying({ item, context }) {
 				</Link>
 			)}
 		</div>
+	);
+}
+
+/** Secondary player buttons. Inline on desktop; behind a "⋯" menu on phones. */
+function ExtraControls() {
+	return (
+		<>
+			<VisualizerSettings />
+			<SleepTimer />
+			<QueueToggle />
+		</>
+	);
+}
+
+function MobileMore() {
+	const timerOn = useUiStore((s) => Boolean(s.sleepTimer));
+	const queueOpen = useUiStore((s) => s.queueOpen);
+	return (
+		<Popover.Root>
+			<Popover.Trigger asChild>
+				<IconButton label="More controls" active={timerOn || queueOpen} className="relative md:hidden">
+					<MoreHorizontal className="h-5 w-5" />
+					{timerOn && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-accent" />}
+				</IconButton>
+			</Popover.Trigger>
+			<Popover.Portal>
+				<Popover.Content
+					side="top"
+					align="end"
+					sideOffset={12}
+					collisionPadding={12}
+					className="z-[60] flex animate-fade-in items-center gap-1 rounded-full border border-line bg-elevated p-1 shadow-2xl outline-none"
+				>
+					<ExtraControls />
+					<Popover.Arrow className="fill-elevated" />
+				</Popover.Content>
+			</Popover.Portal>
+		</Popover.Root>
 	);
 }
 
@@ -162,9 +202,10 @@ export default function PlayerBar() {
 				</div>
 
 				<div className="flex items-center justify-end gap-1">
-					<VisualizerSettings />
-					<SleepTimer />
-					<QueueToggle />
+					<div className="hidden items-center gap-1 md:flex">
+						<ExtraControls />
+					</div>
+					<MobileMore />
 					<DevicePicker />
 					<div className="hidden md:block">
 						<VolumeControl />

@@ -45,6 +45,9 @@ export const useUiStore = create((set) => ({
 	// null | { endsAt: number } | { itemId: string } (pause at the end of that track/episode)
 	sleepTimer: null,
 	setSleepTimer: (sleepTimer) => set({ sleepTimer }),
+	// When the sleep timer last paused playback, so autoplay doesn't undo it.
+	sleptAt: 0,
+	setSleptAt: (sleptAt) => set({ sleptAt }),
 
 	queueOpen: false,
 	setQueueOpen: (queueOpen) => set({ queueOpen }),

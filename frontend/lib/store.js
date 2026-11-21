@@ -35,6 +35,17 @@ export const useUiStore = create((set) => ({
 	webPlayer: { status: 'idle', deviceId: null, message: null },
 	setWebPlayer: (patch) => set((s) => ({ webPlayer: { ...s.webPlayer, ...patch } })),
 
+	// Queue something similar when the queue is about to run out.
+	autoplay: read('antefy-autoplay') !== 'off',
+	setAutoplay: (autoplay) => {
+		write('antefy-autoplay', autoplay ? null : 'off');
+		set({ autoplay });
+	},
+
+	// null | { endsAt: number } | { itemId: string } (pause at the end of that track/episode)
+	sleepTimer: null,
+	setSleepTimer: (sleepTimer) => set({ sleepTimer }),
+
 	queueOpen: false,
 	setQueueOpen: (queueOpen) => set({ queueOpen }),
 

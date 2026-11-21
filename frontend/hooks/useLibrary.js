@@ -95,6 +95,17 @@ export function useFollowedArtists() {
 	});
 }
 
+export function useSavedEpisodes() {
+	const enabled = useAuthed();
+	return useInfiniteQuery({
+		queryKey: ['library', 'episodes'],
+		queryFn: ({ pageParam }) => spotify.getSavedEpisodes(pageParam, 50),
+		initialPageParam: 0,
+		getNextPageParam: (last) => (last?.next ? last.offset + last.items.length : undefined),
+		enabled
+	});
+}
+
 export function useLikedSongs() {
 	const enabled = useAuthed();
 	return useInfiniteQuery({

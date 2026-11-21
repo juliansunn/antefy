@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { Podcast } from 'lucide-react';
@@ -8,7 +8,9 @@ import PlayButton from '@/components/media/PlayButton';
 import SaveButton from '@/components/media/SaveButton';
 import Shelf from '@/components/media/Shelf';
 import { EmptyState, ErrorState, Spinner } from '@/components/ui/States';
+import Chip from '@/components/ui/Chip';
 import { cleanDescription, pluralize } from '@/lib/format';
+import { getSeen, isPlayed, markSeen, setHidePlayed, usePodcastState } from '@/lib/podcastState';
 import { useInView } from '@/hooks/useInView';
 import { useNowPlaying, usePlayFrom } from '@/hooks/usePlayback';
 import { useShow } from '@/hooks/useCollections';
@@ -27,6 +29,18 @@ export default function PodcastPage() {
 	const similar = useSimilarShows(s, saved.data, { enabled: Boolean(saved.data) });
 
 	const list = useMemo(() => (episodes.data?.pages ?? []).flatMap((p) => p.items ?? []).filter(Boolean), [episodes.data]);
+	const podcastState = usePodcastState();
+	const visible = podcastState.hidePlayed ? list.filter((ep) => !isPlayed(podcastState, ep)) : list;
+
+	// "New" = episodes that weren't there on your last visit. Snapshot what was
+	// seen before this visit (per podcast), then record everything shown now.
+	const [seenBefore, setSeenBefore] = useState({ id: null, ids: null });
+	if (id && seenBefore.id !== id) setSeenBefore({ id, ids: getSeen(id) });
+	useEffect(() => {
+		if (id && list.length) markSeen(id, list.map((ep) => ep.id));
+	}, [id, list]);
+	const isNew = (ep) => Boolean(seenBefore.ids && !seenBefore.ids.has(ep.id) && !isPlayed(podcastState, ep));
+	const newCount = seenBefore.ids ? list.filter(isNew).length : 0;
 	const sentinel = useInView(() => episodes.hasNextPage && !episodes.isFetchingNextPage && episodes.fetchNextPage(), {
 		enabled: Boolean(episodes.hasNextPage)
 	});
@@ -83,7 +97,19 @@ export default function PodcastPage() {
 			)}
 			<div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
 				<section aria-label="Episodes">
-					<h2 className="px-4 pb-2 text-xl font-bold sm:px-6">All episodes</h2>
+					<div className="flex flex-wrap items-center gap-3 px-4 pb-2 sm:px-6">
+						<h2 className="text-xl font-bold">All episodes</h2>
+						{newCount > 0 && (
+							<span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-accent-fg">{newCount} new</span>
+						)}
+						<Chip
+							active={podcastState.hidePlayed}
+							onClick={() => setHidePlayed(!podcastState.hidePlayed)}
+							className="ml-auto"
+						>
+							Hide played
+						</Chip>
+					</div>
 					{episodes.isLoading ? (
 						<div className="flex justify-center py-12">
 							<Spinner />
@@ -94,9 +120,14 @@ export default function PodcastPage() {
 						<EmptyState icon={Podcast} title="No episodes yet" />
 					) : (
 						<>
-							{list.map((ep) => (
-								<EpisodeRow key={ep.id} episode={ep} onPlay={onPlay} />
+							{visible.map((ep) => (
+								<EpisodeRow key={ep.id} episode={ep} onPlay={onPlay} isNew={isNew(ep)} />
 							))}
+							{visible.length === 0 && (
+								<p className="px-4 py-8 text-center text-sm text-muted sm:px-6">
+									All loaded episodes are played.
+								</p>
+							)}
 							{episodes.hasNextPage && (
 								<div ref={sentinel} className="flex justify-center py-6">
 									<Spinner />

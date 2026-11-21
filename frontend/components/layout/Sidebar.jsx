@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Heart, History, Home, Library, Plus, Search, Volume2, X } from 'lucide-react';
+import { Bookmark, Heart, History, Home, Library, Plus, Search, Volume2, X } from 'lucide-react';
 import PlaylistDialog from '@/components/media/PlaylistDialog';
 import IconButton from '@/components/ui/IconButton';
 import { useCreatePlaylist } from '@/hooks/usePlaylistEdits';
@@ -17,6 +17,7 @@ const NAV = [
 	{ href: '/search', label: 'Search', icon: Search },
 	{ href: '/library', label: 'Your Library', icon: Library },
 	{ href: '/liked-songs', label: 'Liked Songs', icon: Heart },
+	{ href: '/episodes', label: 'Your Episodes', icon: Bookmark },
 	{ href: '/recent', label: 'Recently Played', icon: History }
 ];
 
@@ -54,7 +55,7 @@ export default function Sidebar({ className }) {
 										active ? 'bg-hover/60 text-fg' : 'text-muted hover:text-fg'
 									)}
 								>
-									<Icon className={cn('h-5 w-5', active && href === '/liked-songs' && 'fill-current')} />
+									<Icon className={cn('h-5 w-5', active && (href === '/liked-songs' || href === '/episodes') && 'fill-current')} />
 									{label}
 								</Link>
 							</li>

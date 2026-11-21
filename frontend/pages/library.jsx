@@ -7,17 +7,18 @@ import { CARD_GRID } from '@/components/media/Shelf';
 import Chip from '@/components/ui/Chip';
 import IconButton from '@/components/ui/IconButton';
 import { EmptyState, ErrorState } from '@/components/ui/States';
-import { useFollowedArtists, useMyPlaylists, useSavedAlbums, useSavedShows } from '@/hooks/useLibrary';
+import { useFollowedArtists, useMyPlaylists, useSavedAlbums, useSavedAudiobooks, useSavedShows } from '@/hooks/useLibrary';
 
 const TABS = [
 	{ id: 'playlists', label: 'Playlists', noun: 'playlists' },
 	{ id: 'albums', label: 'Albums', noun: 'albums' },
 	{ id: 'artists', label: 'Artists', noun: 'artists you follow' },
-	{ id: 'podcasts', label: 'Podcasts', noun: 'podcasts' }
+	{ id: 'podcasts', label: 'Podcasts', noun: 'podcasts' },
+	{ id: 'audiobooks', label: 'Audiobooks', noun: 'audiobooks' }
 ];
 
 function secondaryText(item) {
-	return [item.owner?.display_name, item.artists?.map((a) => a.name).join(' '), item.publisher].filter(Boolean).join(' ');
+	return [item.owner?.display_name, item.artists?.map((a) => a.name).join(' '), item.publisher, item.authors?.map((a) => a.name).join(' ')].filter(Boolean).join(' ');
 }
 
 export default function LibraryPage() {
@@ -27,7 +28,7 @@ export default function LibraryPage() {
 	const [sort, setSort] = useState('recent');
 
 	// Hooks must run unconditionally; react-query caches each list.
-	const results = { playlists: useMyPlaylists(), albums: useSavedAlbums(), artists: useFollowedArtists(), podcasts: useSavedShows() };
+	const results = { playlists: useMyPlaylists(), albums: useSavedAlbums(), artists: useFollowedArtists(), podcasts: useSavedShows(), audiobooks: useSavedAudiobooks() };
 	const tab = TABS.find((t) => t.id === tabId);
 	const { data, isLoading, error, refetch } = results[tabId];
 

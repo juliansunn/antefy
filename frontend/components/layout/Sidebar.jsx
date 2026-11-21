@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Heart, History, Home, Library, Search, Volume2, X } from 'lucide-react';
+import { Heart, History, Home, Library, Plus, Search, Volume2, X } from 'lucide-react';
+import PlaylistDialog from '@/components/media/PlaylistDialog';
+import IconButton from '@/components/ui/IconButton';
+import { useCreatePlaylist } from '@/hooks/usePlaylistEdits';
 import Cover from '@/components/ui/Cover';
 import { Skeleton } from '@/components/ui/States';
 import Logo from './Logo';
@@ -26,6 +29,8 @@ export default function Sidebar({ className }) {
 	const { data: playlists, isLoading } = useMyPlaylists();
 	const { contextUri, isPlaying } = useNowPlaying();
 	const [filter, setFilter] = useState('');
+	const [creating, setCreating] = useState(false);
+	const create = useCreatePlaylist();
 
 	const filtered = useMemo(() => {
 		const q = filter.trim().toLowerCase();
@@ -61,7 +66,12 @@ export default function Sidebar({ className }) {
 			<section data-surface className="flex min-h-0 flex-1 flex-col rounded-xl bg-surface">
 				<div className="flex items-center justify-between px-6 pb-2 pt-4">
 					<h2 className="text-sm font-bold text-muted">Your playlists</h2>
-					{playlists?.length > 0 && <span className="text-xs text-subtle">{playlists.length}</span>}
+					<div className="flex items-center gap-1">
+						{playlists?.length > 0 && <span className="text-xs text-subtle">{playlists.length}</span>}
+						<IconButton label="Create playlist" size="sm" onClick={() => setCreating(true)}>
+							<Plus className="h-4 w-4" />
+						</IconButton>
+					</div>
 				</div>
 				{playlists?.length > 8 && (
 					<div className="relative mx-4 mb-2">
@@ -128,6 +138,19 @@ export default function Sidebar({ className }) {
 					)}
 				</ul>
 			</section>
+			<PlaylistDialog
+				open={creating}
+				onOpenChange={setCreating}
+				pending={create.isPending}
+				onSubmit={(details) =>
+					create.mutate(details, {
+						onSuccess: (p) => {
+							setCreating(false);
+							router.push(`/playlist/${p.id}`);
+						}
+					})
+				}
+			/>
 		</aside>
 	);
 }

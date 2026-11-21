@@ -10,6 +10,7 @@ import DevicePicker from './DevicePicker';
 import ProgressBar from './ProgressBar';
 import VolumeControl from './VolumeControl';
 import VisualizerSettings from '@/components/visualizer/VisualizerSettings';
+import QueuePanel, { QueueToggle } from './QueuePanel';
 import { cn } from '@/lib/cn';
 import { usePlaybackState, usePlayerControls, useProgress } from '@/hooks/usePlayback';
 import { useSavedStatus } from '@/hooks/useLibrary';
@@ -161,6 +162,7 @@ export default function PlayerBar() {
 
 				<div className="flex items-center justify-end gap-1">
 					<VisualizerSettings />
+					<QueueToggle />
 					<DevicePicker />
 					<div className="hidden md:block">
 						<VolumeControl />
@@ -180,6 +182,7 @@ export default function PlayerBar() {
 				</div>
 			)}
 			<MiniProgress />
+			<QueuePanel />
 		</footer>
 	);
 }

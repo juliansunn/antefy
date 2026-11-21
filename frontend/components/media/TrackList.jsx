@@ -27,6 +27,7 @@ export default function TrackList({
 	hasMore,
 	loadingMore,
 	onLoadMore,
+	playlist, // the playlist these rows belong to, enabling "Remove from this playlist"
 	className
 }) {
 	const playFrom = usePlayFrom();
@@ -84,6 +85,7 @@ export default function TrackList({
 						dateColumn={dateColumn}
 						saved={isSaved(row.track.uri)}
 						onPlay={onPlay}
+						playlist={playlist}
 					/>
 				))}
 			</div>
@@ -103,7 +105,7 @@ export default function TrackList({
 	);
 }
 
-const TrackRow = memo(function TrackRow({ row, index, grid, showAlbum, showCover, dateColumn, saved, onPlay }) {
+const TrackRow = memo(function TrackRow({ row, index, grid, showAlbum, showCover, dateColumn, saved, onPlay, playlist }) {
 	const { track } = row;
 	const nowPlaying = useNowPlaying();
 	const isCurrent = nowPlaying.id === track.id || (track.linked_from && nowPlaying.id === track.linked_from.id);
@@ -188,7 +190,7 @@ const TrackRow = memo(function TrackRow({ row, index, grid, showAlbum, showCover
 					className={cn(!saved && 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100')}
 				/>
 				<span className="w-10 text-right tabular-nums">{formatDuration(track.duration_ms)}</span>
-				<TrackMenu track={track} className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100" />
+				<TrackMenu track={track} playlist={playlist} className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100" />
 			</div>
 		</div>
 	);

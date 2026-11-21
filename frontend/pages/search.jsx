@@ -1,10 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
-import { SearchX } from 'lucide-react';
+import { History, Radio, SearchX, X } from 'lucide-react';
 import Cover from '@/components/ui/Cover';
 import Chip from '@/components/ui/Chip';
 import { EmptyState, ErrorState, Spinner } from '@/components/ui/States';
@@ -13,8 +13,14 @@ import PlayButton from '@/components/media/PlayButton';
 import Shelf, { CARD_GRID } from '@/components/media/Shelf';
 import TrackList, { TrackListSkeleton } from '@/components/media/TrackList';
 import ArtistLinks from '@/components/media/ArtistLinks';
-import { useNowPlaying, usePlayFrom } from '@/hooks/usePlayback';
+import EpisodeRow from '@/components/media/EpisodeRow';
+import EpisodeCard, { EPISODE_GRID } from '@/components/media/EpisodeCard';
+import { useNowPlaying, usePlayEpisode, usePlayFrom } from '@/hooks/usePlayback';
+import { useSavedShows } from '@/hooks/useLibrary';
+import { useEpisodeFeed, usePodcastRecommendations, useSimilarShows } from '@/hooks/usePodcasts';
+import { addRecentSearch, clearRecentSearches, removeRecentSearch, useRecentSearches } from '@/lib/recentSearches';
 import * as spotify from '@/lib/spotify';
+import { cn } from '@/lib/cn';
 
 const FILTERS = [
 	{ id: 'all', label: 'All' },
@@ -22,7 +28,26 @@ const FILTERS = [
 	{ id: 'artist', label: 'Artists', key: 'artists' },
 	{ id: 'album', label: 'Albums', key: 'albums' },
 	{ id: 'playlist', label: 'Playlists', key: 'playlists' },
-	{ id: 'show', label: 'Podcasts', key: 'shows' }
+	{ id: 'show', label: 'Podcasts', key: 'shows' },
+	{ id: 'episode', label: 'Episodes', key: 'episodes' },
+	{ id: 'audiobook', label: 'Audiobooks', key: 'audiobooks' }
+];
+
+const ALL_TYPES = ['track', 'artist', 'album', 'playlist', 'show', 'episode', 'audiobook'];
+
+const PODCAST_TOPICS = [
+	['True crime', 'from-red-700 to-zinc-900'],
+	['Comedy', 'from-yellow-500 to-orange-700'],
+	['News', 'from-sky-600 to-slate-800'],
+	['Technology', 'from-violet-600 to-indigo-900'],
+	['History', 'from-amber-700 to-stone-900'],
+	['Science', 'from-teal-500 to-cyan-900'],
+	['Business', 'from-emerald-600 to-green-900'],
+	['Sports', 'from-orange-500 to-red-800'],
+	['Health', 'from-pink-500 to-rose-800'],
+	['Society & culture', 'from-fuchsia-600 to-purple-900'],
+	['Self-improvement', 'from-lime-500 to-emerald-800'],
+	['Interviews', 'from-blue-500 to-indigo-800']
 ];
 
 const GENRES = [
@@ -48,7 +73,9 @@ function TopResult({ item }) {
 	const now = useNowPlaying();
 	if (!item) return null;
 	const isTrack = item.type === 'track';
-	const href = isTrack ? `/album/${item.album?.id}` : `/${item.type === 'show' ? 'podcast' : item.type}/${item.id}`;
+	const page = { show: 'podcast' }[item.type] ?? item.type;
+	const href = isTrack ? `/album/${item.album?.id}` : `/${page}/${item.id}`;
+	const subtitle = isTrack ? null : item.type === 'show' ? item.publisher : item.authors?.map((a) => a.name).join(', ');
 	const current = isTrack ? now.uri === item.uri : now.contextUri === item.uri;
 	const images = isTrack ? item.album?.images : item.images;
 
@@ -61,11 +88,20 @@ function TopResult({ item }) {
 				</Link>
 				<p className="mt-1 flex items-center gap-2 text-sm text-muted">
 					{isTrack && <ArtistLinks artists={item.artists} className="relative z-10" />}
-					<span className="rounded-full bg-bg/60 px-2.5 py-0.5 text-xs font-semibold capitalize text-fg">
-						{item.type === 'track' ? 'Song' : item.type}
+					{subtitle && <span className="truncate">{subtitle}</span>}
+					<span className="shrink-0 rounded-full bg-bg/60 px-2.5 py-0.5 text-xs font-semibold capitalize text-fg">
+						{{ track: 'Song', show: 'Podcast' }[item.type] ?? item.type}
 					</span>
 				</p>
 			</div>
+			{isTrack && (
+				<Link
+					href={`/radio/${item.id}`}
+					className="relative z-10 inline-flex w-fit items-center gap-1.5 rounded-full border border-line px-3 py-1 text-xs font-semibold text-muted transition hover:border-fg hover:text-fg"
+				>
+					<Radio className="h-3.5 w-3.5" /> Song radio
+				</Link>
+			)}
 			<PlayButton
 				playing={current && now.isPlaying}
 				onClick={() => (isTrack ? playFrom({ uris: [item.uri] }, item) : playFrom({ contextUri: item.uri }))}
@@ -75,25 +111,36 @@ function TopResult({ item }) {
 	);
 }
 
-function pickTopResult(data, q) {
-	const needle = q.toLowerCase().replace(/^(artist|album|track|genre):/, '').replace(/"/g, '').trim();
-	const artist = clean(data?.artists)[0];
-	if (artist && artist.name.toLowerCase() === needle) return artist;
-	const track = clean(data?.tracks)[0];
-	const album = clean(data?.albums)[0];
-	if (album && album.name.toLowerCase() === needle) return album;
-	return track ?? artist ?? album ?? clean(data?.playlists)[0] ?? null;
+const norm = (s) => (s ?? '').toLowerCase().replace(/^the\s+/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * Prefer an exact name match of any type, then a podcast you already follow
+ * that matches the query, then Spotify's top track.
+ */
+function pickTopResult(data, q, savedShows = []) {
+	const needle = norm(q.replace(/^(artist|album|track|genre):/i, '').replace(/"/g, ''));
+	const lists = ['artists', 'shows', 'albums', 'audiobooks', 'playlists'].map((k) => clean(data?.[k]));
+	for (const list of lists) {
+		const hit = list[0] && norm(list[0].name) === needle ? list[0] : null;
+		if (hit) return hit;
+	}
+	const followed = new Set(savedShows.map((s) => s.id));
+	const followedMatch = clean(data?.shows).find((s) => followed.has(s.id) && norm(s.name).includes(needle));
+	if (needle && followedMatch) return followedMatch;
+	const show = clean(data?.shows)[0];
+	if (needle.length > 3 && show && norm(show.name).startsWith(needle)) return show;
+	return clean(data?.tracks)[0] ?? lists.find((l) => l.length)?.[0] ?? null;
 }
 
-function Browse() {
+function Tiles({ title, tiles, href }) {
 	return (
-		<div className="px-4 sm:px-6">
-			<h1 className="pb-4 pt-2 text-2xl font-bold">Browse genres</h1>
+		<section className="px-4 sm:px-6">
+			<h2 className="pb-4 text-2xl font-bold">{title}</h2>
 			<div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
-				{GENRES.map(([name, gradient]) => (
+				{tiles.map(([name, gradient]) => (
 					<Link
 						key={name}
-						href={`/search?q=${encodeURIComponent(`genre:"${name.toLowerCase()}"`)}`}
+						href={href(name)}
 						className={`relative aspect-[16/10] overflow-hidden rounded-xl bg-gradient-to-br ${gradient} p-4 text-xl font-extrabold text-white shadow-lg transition hover:scale-[1.02]`}
 					>
 						{name}
@@ -101,15 +148,106 @@ function Browse() {
 					</Link>
 				))}
 			</div>
+		</section>
+	);
+}
+
+function RecentSearches() {
+	const recent = useRecentSearches();
+	if (!recent.length) return null;
+	return (
+		<section className="px-4 sm:px-6">
+			<div className="flex items-center justify-between pb-3">
+				<h2 className="text-2xl font-bold">Recent searches</h2>
+				<button type="button" onClick={clearRecentSearches} className="text-sm font-semibold text-muted hover:text-fg hover:underline">
+					Clear
+				</button>
+			</div>
+			<ul className="flex flex-wrap gap-2">
+				{recent.map((q) => (
+					<li key={q} className="group flex items-center rounded-full bg-elevated text-sm transition hover:bg-hover">
+						<Link href={`/search?q=${encodeURIComponent(q)}`} className="flex items-center gap-2 py-1.5 pl-3.5 pr-1">
+							<History className="h-3.5 w-3.5 text-muted" />
+							{q}
+						</Link>
+						<button
+							type="button"
+							aria-label={`Remove “${q}” from recent searches`}
+							onClick={() => removeRecentSearch(q)}
+							className="mr-1 rounded-full p-1 text-muted hover:text-fg"
+						>
+							<X className="h-3.5 w-3.5" />
+						</button>
+					</li>
+				))}
+			</ul>
+		</section>
+	);
+}
+
+function EpisodeShelf({ title, episodes, loading }) {
+	const playEpisode = usePlayEpisode();
+	if (!loading && !episodes?.length) return null;
+	return (
+		<section>
+			<h2 className="mb-3 px-4 text-2xl font-bold sm:px-6">{title}</h2>
+			<div className={cn(EPISODE_GRID, 'sm:px-6')}>
+				{loading
+					? Array.from({ length: 3 }, (_, i) => <div key={i} className="skeleton h-[6.5rem]" />)
+					: episodes.slice(0, 6).map((ep) => <EpisodeCard key={ep.id} episode={ep} onPlay={playEpisode} />)}
+			</div>
+		</section>
+	);
+}
+
+function Browse() {
+	const saved = useSavedShows();
+	const feed = useEpisodeFeed(saved.data);
+	const recs = usePodcastRecommendations(saved.data);
+	const hasShows = Boolean(saved.data?.length);
+
+	return (
+		<div className="space-y-10 pt-2">
+			<RecentSearches />
+			{hasShows && (
+				<>
+					<EpisodeShelf title="Continue listening" episodes={feed.data?.inProgress} loading={feed.isLoading} />
+					<EpisodeShelf title="New from your podcasts" episodes={feed.data?.fresh} loading={feed.isLoading} />
+					<div className="space-y-8 px-1 sm:px-3">
+						<Shelf title="Podcasts for you" items={recs.data?.forYou} loading={recs.isLoading} rows={1} />
+						{recs.data?.because.map(({ seed, shows }) => (
+							<Shelf key={seed.id} title={`Because you listen to ${seed.name}`} items={shows} rows={1} />
+						))}
+					</div>
+				</>
+			)}
+			<Tiles
+				title="Podcast topics"
+				tiles={PODCAST_TOPICS}
+				href={(name) => `/search?q=${encodeURIComponent(name.toLowerCase())}&type=show`}
+			/>
+			<Tiles
+				title="Browse genres"
+				tiles={GENRES}
+				href={(name) => `/search?q=${encodeURIComponent(`genre:"${name.toLowerCase()}"`)}`}
+			/>
 		</div>
 	);
 }
 
+function SimilarPodcasts({ show }) {
+	const saved = useSavedShows();
+	const similar = useSimilarShows(show, saved.data, { enabled: Boolean(saved.data) });
+	return <Shelf title={`Podcasts like ${show.name}`} items={similar.data} loading={similar.isLoading} rows={1} />;
+}
+
 function AllResults({ q }) {
 	const enabled = useSession().status === 'authenticated';
+	const saved = useSavedShows();
+	const playEpisode = usePlayEpisode();
 	const { data, isLoading, error, refetch, isPlaceholderData } = useQuery({
 		queryKey: ['search', q, 'all'],
-		queryFn: () => spotify.search(q),
+		queryFn: () => spotify.search(q, ALL_TYPES),
 		enabled,
 		placeholderData: keepPreviousData,
 		staleTime: 5 * 60 * 1000
@@ -129,8 +267,34 @@ function AllResults({ q }) {
 		);
 	}
 	const tracks = clean(data?.tracks).map((track) => ({ track }));
-	const top = pickTopResult(data, q);
-	const nothing = !top && !clean(data?.shows).length;
+	const top = pickTopResult(data, q, saved.data);
+	const episodes = clean(data?.episodes);
+	const nothing = !top && !clean(data?.shows).length && !episodes.length;
+	// Put podcasts first when the query is clearly about one.
+	const podcastFirst = top?.type === 'show';
+	const podcastSections = (
+		<>
+			<Shelf title="Podcasts" items={clean(data?.shows)} rows={1} />
+			{episodes.length > 0 && (
+				<section>
+					<div className="flex items-end justify-between px-3 pb-1">
+						<h2 className="text-xl font-bold tracking-tight sm:text-2xl">Episodes</h2>
+						<Link
+							href={`/search?q=${encodeURIComponent(q)}&type=episode`}
+							className="text-sm font-semibold text-muted hover:text-fg hover:underline"
+						>
+							Show all
+						</Link>
+					</div>
+					<div className="-mx-1 sm:-mx-3">
+						{episodes.slice(0, 4).map((ep) => (
+							<EpisodeRow key={ep.id} episode={ep} onPlay={playEpisode} />
+						))}
+					</div>
+				</section>
+			)}
+		</>
+	);
 	if (nothing) {
 		return (
 			<EmptyState icon={SearchX} title={`No results found for “${q}”`}>
@@ -154,10 +318,13 @@ function AllResults({ q }) {
 				)}
 			</div>
 			<div className="space-y-8 px-1 sm:px-3">
+				{podcastFirst && podcastSections}
+				{podcastFirst && <SimilarPodcasts show={top} />}
 				<Shelf title="Artists" items={clean(data?.artists)} rows={1} />
 				<Shelf title="Albums" items={clean(data?.albums)} rows={1} />
 				<Shelf title="Playlists" items={clean(data?.playlists)} rows={1} />
-				<Shelf title="Podcasts" items={clean(data?.shows)} rows={1} />
+				{!podcastFirst && podcastSections}
+				<Shelf title="Audiobooks" items={clean(data?.audiobooks)} rows={1} />
 			</div>
 		</div>
 	);
@@ -165,6 +332,7 @@ function AllResults({ q }) {
 
 function TypedResults({ q, filter }) {
 	const enabled = useSession().status === 'authenticated';
+	const playEpisode = usePlayEpisode();
 	const res = useInfiniteQuery({
 		queryKey: ['search', q, filter.id],
 		queryFn: ({ pageParam }) => spotify.search(q, [filter.id], { limit: 10, offset: pageParam }),
@@ -179,7 +347,7 @@ function TypedResults({ q, filter }) {
 	const items = useMemo(() => (res.data?.pages ?? []).flatMap((p) => clean(p?.[filter.key])), [res.data, filter.key]);
 
 	if (res.error) return <ErrorState error={res.error} onRetry={res.refetch} />;
-	if (res.isLoading) return filter.id === 'track' ? <TrackListSkeleton /> : (
+	if (res.isLoading) return filter.id === 'track' || filter.id === 'episode' ? <TrackListSkeleton /> : (
 		<div className={CARD_GRID}>{Array.from({ length: 10 }, (_, i) => <MediaCardSkeleton key={i} />)}</div>
 	);
 	if (!items.length) return <EmptyState icon={SearchX} title={`No ${filter.label.toLowerCase()} found for “${q}”`} />;
@@ -197,6 +365,16 @@ function TypedResults({ q, filter }) {
 		</div>
 	);
 
+	if (filter.id === 'episode') {
+		return (
+			<>
+				{items.map((ep) => (
+					<EpisodeRow key={ep.id} episode={ep} onPlay={playEpisode} />
+				))}
+				{more}
+			</>
+		);
+	}
 	if (filter.id === 'track') {
 		const rows = items.map((track) => ({ track }));
 		return (
@@ -222,6 +400,13 @@ export default function SearchPage() {
 	const router = useRouter();
 	const q = typeof router.query.q === 'string' ? router.query.q.trim() : '';
 	const filter = FILTERS.find((f) => f.id === router.query.type) ?? FILTERS[0];
+
+	// Remember a query once the user has paused on it (typing updates the URL as they go).
+	useEffect(() => {
+		if (!q) return undefined;
+		const t = setTimeout(() => addRecentSearch(q), 1500);
+		return () => clearTimeout(t);
+	}, [q]);
 
 	const setFilter = (id) => {
 		const query = { q, ...(id !== 'all' ? { type: id } : {}) };

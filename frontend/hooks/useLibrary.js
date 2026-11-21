@@ -61,6 +61,17 @@ export function useSavedShows() {
 	});
 }
 
+export function useSavedAudiobooks() {
+	const enabled = useAuthed();
+	return useQuery({
+		queryKey: ['library', 'audiobooks'],
+		queryFn: () =>
+			fetchAllOffset(spotify.getSavedAudiobooks).then((items) => items.map((i) => i.audiobook ?? i).filter((a) => a?.id)),
+		enabled,
+		staleTime: 5 * 60 * 1000
+	});
+}
+
 export function useFollowedArtists() {
 	const enabled = useAuthed();
 	return useQuery({
@@ -106,7 +117,7 @@ const mergeSaved = (results) => Object.assign({}, ...results.map((r) => r.data ?
 
 export function useSavedStatus(uris, { assumeSaved = false } = {}) {
 	const enabled = useAuthed() && !assumeSaved;
-	const valid = useMemo(() => (uris ?? []).filter((u) => u && /^spotify:(track|episode):/.test(u)), [uris]);
+	const valid = useMemo(() => (uris ?? []).filter((u) => u && /^spotify:(track|episode|album|show|audiobook):/.test(u)), [uris]);
 	const chunks = useMemo(() => {
 		const out = [];
 		for (let i = 0; i < valid.length; i += CHUNK) out.push(valid.slice(i, i + CHUNK));
@@ -145,9 +156,13 @@ export function useToggleSaved() {
 			// Seed a single-item entry so the player bar's heart reflects it too.
 			queryClient.setQueryData(['saved', [uri]], { [uri]: !saved });
 		},
-		onSuccess: (_d, { saved, name }) => {
-			toast.success(saved ? `Removed${name ? ` “${name}”` : ''} from Liked Songs` : `Added${name ? ` “${name}”` : ''} to Liked Songs`);
-			queryClient.invalidateQueries({ queryKey: ['library', 'liked'] });
+		onSuccess: (_d, { uri, saved, name }) => {
+			const type = uri.split(':')[1];
+			const where = type === 'track' ? 'Liked Songs' : type === 'show' ? 'your podcasts' : 'Your Library';
+			const label = name ? ` “${name}”` : '';
+			toast.success(saved ? `Removed${label} from ${where}` : `Added${label} to ${where}`);
+			const list = { track: 'liked', album: 'albums', show: 'shows', audiobook: 'audiobooks', episode: 'episodes' }[type];
+			if (list) queryClient.invalidateQueries({ queryKey: ['library', list] });
 		},
 		onError: (e, { uri, saved }) => {
 			setEverywhere(uri, saved);

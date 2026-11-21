@@ -9,7 +9,8 @@ const HREF = {
 	playlist: (i) => `/playlist/${i.id}`,
 	album: (i) => `/album/${i.id}`,
 	artist: (i) => `/artist/${i.id}`,
-	show: (i) => `/podcast/${i.id}`
+	show: (i) => `/podcast/${i.id}`,
+	audiobook: (i) => `/audiobook/${i.id}`
 };
 
 function subtitle(item) {
@@ -25,6 +26,8 @@ function subtitle(item) {
 			return 'Artist';
 		case 'show':
 			return item.publisher || 'Podcast';
+		case 'audiobook':
+			return item.authors?.map((a) => a.name).join(', ') || 'Audiobook';
 		default:
 			return '';
 	}

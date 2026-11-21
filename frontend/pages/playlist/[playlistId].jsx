@@ -1,14 +1,18 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { ListMusic, Lock } from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import { ListMusic, Lock, Pencil } from 'lucide-react';
 import CollectionHeader, { ActionBar, Dot } from '@/components/media/CollectionHeader';
 import PlayButton from '@/components/media/PlayButton';
+import PlaylistDialog from '@/components/media/PlaylistDialog';
+import IconButton from '@/components/ui/IconButton';
 import TrackList, { TrackListSkeleton } from '@/components/media/TrackList';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { cleanDescription, formatNumber, pluralize } from '@/lib/format';
 import { useNowPlaying, usePlayFrom } from '@/hooks/usePlayback';
 import { usePlaylist } from '@/hooks/useCollections';
+import { canEditPlaylist, useUpdatePlaylist } from '@/hooks/usePlaylistEdits';
 
 export default function PlaylistPage() {
 	const { query } = useRouter();
@@ -17,6 +21,10 @@ export default function PlaylistPage() {
 	const playFrom = usePlayFrom();
 	const now = useNowPlaying();
 	const p = playlist.data;
+	const { data: session } = useSession();
+	const editable = canEditPlaylist(p, session?.user?.id);
+	const update = useUpdatePlaylist();
+	const [editing, setEditing] = useState(false);
 
 	const rows = useMemo(
 		() =>
@@ -69,6 +77,11 @@ export default function PlaylistPage() {
 				<ActionBar>
 					<PlayButton size="lg" playing={isCurrent && now.isPlaying} onClick={() => playFrom(context)} />
 					{p.public === false && <Lock className="h-5 w-5 text-muted" aria-label="Private" />}
+					{editable && p.owner?.id === session?.user?.id && (
+						<IconButton label="Edit details" onClick={() => setEditing(true)}>
+							<Pencil className="h-5 w-5" />
+						</IconButton>
+					)}
 				</ActionBar>
 			)}
 			{items.isLoading ? (
@@ -87,9 +100,22 @@ export default function PlaylistPage() {
 					items={rows}
 					context={context}
 					dateColumn="added"
+					playlist={p}
 					hasMore={items.hasNextPage}
 					loadingMore={items.isFetchingNextPage}
 					onLoadMore={items.fetchNextPage}
+				/>
+			)}
+			{p && (
+				<PlaylistDialog
+					open={editing}
+					onOpenChange={setEditing}
+					playlist={p}
+					pending={update.isPending}
+					onSubmit={(details) => {
+						update.mutate({ playlist: p, ...details });
+						setEditing(false);
+					}}
 				/>
 			)}
 		</>

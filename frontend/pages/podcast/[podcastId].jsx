@@ -5,11 +5,15 @@ import { Podcast } from 'lucide-react';
 import CollectionHeader, { ActionBar, Dot } from '@/components/media/CollectionHeader';
 import EpisodeRow from '@/components/media/EpisodeRow';
 import PlayButton from '@/components/media/PlayButton';
+import SaveButton from '@/components/media/SaveButton';
+import Shelf from '@/components/media/Shelf';
 import { EmptyState, ErrorState, Spinner } from '@/components/ui/States';
 import { cleanDescription, pluralize } from '@/lib/format';
 import { useInView } from '@/hooks/useInView';
 import { useNowPlaying, usePlayFrom } from '@/hooks/usePlayback';
 import { useShow } from '@/hooks/useCollections';
+import { useSavedShows } from '@/hooks/useLibrary';
+import { useSimilarShows } from '@/hooks/usePodcasts';
 
 export default function PodcastPage() {
 	const { query } = useRouter();
@@ -19,6 +23,8 @@ export default function PodcastPage() {
 	const now = useNowPlaying();
 	const [expanded, setExpanded] = useState(false);
 	const s = show.data;
+	const saved = useSavedShows();
+	const similar = useSimilarShows(s, saved.data, { enabled: Boolean(saved.data) });
 
 	const list = useMemo(() => (episodes.data?.pages ?? []).flatMap((p) => p.items ?? []).filter(Boolean), [episodes.data]);
 	const sentinel = useInView(() => episodes.hasNextPage && !episodes.isFetchingNextPage && episodes.fetchNextPage(), {
@@ -72,6 +78,7 @@ export default function PodcastPage() {
 						onClick={() => (list[0] ? onPlay(list[0]) : playFrom({ contextUri: s.uri }))}
 						label="Play latest episode"
 					/>
+					<SaveButton uri={s.uri} name={s.name} labels={['Follow', 'Following']} />
 				</ActionBar>
 			)}
 			<div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -113,6 +120,9 @@ export default function PodcastPage() {
 						)}
 					</aside>
 				)}
+			</div>
+			<div className="mt-10 px-1 sm:px-3">
+				<Shelf title="Podcasts like this" items={similar.data} loading={similar.isLoading} rows={1} />
 			</div>
 		</>
 	);

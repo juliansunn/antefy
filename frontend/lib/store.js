@@ -35,6 +35,9 @@ export const useUiStore = create((set) => ({
 	webPlayer: { status: 'idle', deviceId: null, message: null },
 	setWebPlayer: (patch) => set((s) => ({ webPlayer: { ...s.webPlayer, ...patch } })),
 
+	queueOpen: false,
+	setQueueOpen: (queueOpen) => set({ queueOpen }),
+
 	// Volume to restore after unmuting.
 	volumeBeforeMute: null,
 	setVolumeBeforeMute: (volumeBeforeMute) => set({ volumeBeforeMute })

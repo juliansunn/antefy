@@ -5,6 +5,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Home, Library, Search } from 'lucide-react';
 import PlayerBar from '@/components/player/PlayerBar';
 import WebPlayerBridge from '@/components/player/WebPlayerBridge';
+import PlaybackAutomation from '@/components/player/PlaybackAutomation';
 import AuroraBackground from '@/components/visualizer/AuroraBackground';
 import VisualizerController from '@/components/visualizer/VisualizerController';
 import Sidebar from './Sidebar';
@@ -73,6 +74,7 @@ export default function AppShell({ children }) {
 			</div>
 
 			<WebPlayerBridge />
+			<PlaybackAutomation />
 			<VisualizerController />
 			<PlayerBar />
 

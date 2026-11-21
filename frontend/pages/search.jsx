@@ -18,6 +18,7 @@ import EpisodeCard, { EPISODE_GRID } from '@/components/media/EpisodeCard';
 import { useNowPlaying, usePlayEpisode, usePlayFrom } from '@/hooks/usePlayback';
 import { useSavedShows } from '@/hooks/useLibrary';
 import { useEpisodeFeed, usePodcastRecommendations, useSimilarShows } from '@/hooks/usePodcasts';
+import { isPlayed, usePodcastState } from '@/lib/podcastState';
 import { addRecentSearch, clearRecentSearches, removeRecentSearch, useRecentSearches } from '@/lib/recentSearches';
 import * as spotify from '@/lib/spotify';
 import { cn } from '@/lib/cn';
@@ -185,8 +186,10 @@ function RecentSearches() {
 	);
 }
 
-function EpisodeShelf({ title, episodes, loading }) {
+function EpisodeShelf({ title, episodes: all, loading }) {
 	const playEpisode = usePlayEpisode();
+	const podcastState = usePodcastState();
+	const episodes = all?.filter((ep) => !isPlayed(podcastState, ep));
 	if (!loading && !episodes?.length) return null;
 	return (
 		<section>

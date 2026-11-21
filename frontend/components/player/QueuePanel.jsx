@@ -197,6 +197,8 @@ export function QueueToggle() {
 export default function QueuePanel() {
 	const open = useUiStore((s) => s.queueOpen);
 	const setOpen = useUiStore((s) => s.setQueueOpen);
+	const autoplay = useUiStore((s) => s.autoplay);
+	const setAutoplay = useUiStore((s) => s.setAutoplay);
 	const { data: playback } = usePlaybackState();
 	const current = playback?.item;
 	const queue = useQuery({
@@ -221,6 +223,18 @@ export default function QueuePanel() {
 				>
 					<div className="flex items-center justify-between border-b border-line px-4 py-3">
 						<Dialog.Title className="font-bold">Queue</Dialog.Title>
+						<label className="ml-auto mr-2 flex cursor-pointer items-center gap-2 text-xs font-semibold text-muted" title="When the queue runs out, add a similar song or the next episode">
+							Autoplay
+							<button
+								type="button"
+								role="switch"
+								aria-checked={autoplay}
+								onClick={() => setAutoplay(!autoplay)}
+								className={cn('relative h-5 w-9 rounded-full transition', autoplay ? 'bg-accent' : 'bg-fg/25')}
+							>
+								<span className={cn('absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all', autoplay ? 'left-[1.125rem]' : 'left-0.5')} />
+							</button>
+						</label>
 						<Dialog.Close asChild>
 							<IconButton label="Close queue" size="sm">
 								<X className="h-4 w-4" />

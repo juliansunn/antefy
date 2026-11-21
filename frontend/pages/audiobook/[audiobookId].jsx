@@ -98,7 +98,7 @@ export default function AudiobookPage() {
 					) : (
 						<>
 							{list.map((ch) => (
-								<EpisodeRow key={ch.id} episode={ch} onPlay={onPlay} />
+								<EpisodeRow key={ch.id} episode={ch} onPlay={onPlay} markable={false} />
 							))}
 							{chapters.hasNextPage && (
 								<div ref={sentinel} className="flex justify-center py-6">

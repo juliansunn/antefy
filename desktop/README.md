@@ -1,11 +1,12 @@
 # Antefy for macOS
 
-Electron shell that runs the Next.js app as a bundled standalone server on `http://127.0.0.1:43117`
-(Spotify only accepts loopback redirect URIs on 127.0.0.1).
+Electron shell that runs the Next.js app as a bundled standalone server on `http://127.0.0.1:3000`
+(Spotify only accepts loopback redirect URIs on 127.0.0.1). It reuses the dev redirect URI, so quit
+`npm run dev` before opening the app. Set `ANTEFY_PORT` in `antefy.env` to use another registered port.
 
 ## Setup
 
-1. Add this redirect URI to your Spotify app: `http://127.0.0.1:43117/api/auth/callback/spotify`
+1. Make sure this redirect URI is registered in your Spotify app: `http://127.0.0.1:3000/api/auth/callback/spotify`
 2. `npm install`
 
 ## Run / build

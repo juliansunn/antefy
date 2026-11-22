@@ -7,16 +7,21 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const PORT = Number(process.env.ANTEFY_PORT) || 43117;
-const ORIGIN = `http://127.0.0.1:${PORT}`;
+// Defaults to 3000 so it reuses the redirect URI already registered for local
+// development (http://127.0.0.1:3000/api/auth/callback/spotify). Spotify's
+// dashboard doesn't accept arbitrary new loopback ports, so changing this
+// (ANTEFY_PORT in antefy.env or the environment) needs a matching redirect URI.
+let PORT = 3000;
+let ORIGIN = `http://127.0.0.1:${PORT}`;
 // Set ANTEFY_URL (e.g. http://127.0.0.1:3000) to point the shell at `npm run dev` instead.
 const DEV_URL = process.env.ANTEFY_URL;
 
-const CONFIG_TEMPLATE = `# Antefy desktop config. Fill in from https://developer.spotify.com/dashboard
-# and add this redirect URI to your Spotify app:
+const configTemplate = () => `# Antefy desktop config. Fill in from https://developer.spotify.com/dashboard
+# and make sure this redirect URI is registered in your Spotify app:
 #   ${ORIGIN}/api/auth/callback/spotify
 SPOTIFY_CLIENT_ID=
 SPOTIFY_CLIENT_SECRET=
+# ANTEFY_PORT=3000
 `;
 
 // Keep config in ~/Library/Application Support/Antefy (default would use the package name).
@@ -57,7 +62,7 @@ function loadConfig() {
 async function promptForConfig(configFile) {
 	if (!fs.existsSync(configFile)) {
 		fs.mkdirSync(path.dirname(configFile), { recursive: true });
-		fs.writeFileSync(configFile, CONFIG_TEMPLATE, { mode: 0o600 });
+		fs.writeFileSync(configFile, configTemplate(), { mode: 0o600 });
 	}
 	const { response } = await dialog.showMessageBox({
 		type: 'info',
@@ -97,7 +102,7 @@ function startServer(env) {
 		server.once('exit', (code) => {
 			exited = true;
 			server = null;
-			reject(new Error(`The server stopped (code ${code}). Is port ${PORT} already in use?\n\n${log.join('').slice(-1500)}`));
+			reject(new Error(`The server stopped (code ${code}). Is port ${PORT} already in use (e.g. by npm run dev)?\n\n${log.join('').slice(-1500)}`));
 		});
 		const poll = async () => {
 			if (exited) return;
@@ -149,6 +154,8 @@ if (!app.requestSingleInstanceLock()) {
 		if (DEV_URL) return createWindow(DEV_URL);
 
 		const { env, configFile } = loadConfig();
+		PORT = Number(process.env.ANTEFY_PORT || env.ANTEFY_PORT) || PORT;
+		ORIGIN = `http://127.0.0.1:${PORT}`;
 		if (!env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_CLIENT_SECRET) return promptForConfig(configFile);
 		try {
 			await startServer(env);

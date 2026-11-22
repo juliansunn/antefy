@@ -19,6 +19,9 @@ SPOTIFY_CLIENT_ID=
 SPOTIFY_CLIENT_SECRET=
 `;
 
+// Keep config in ~/Library/Application Support/Antefy (default would use the package name).
+app.setPath('userData', path.join(app.getPath('appData'), 'Antefy'));
+
 let server = null;
 let win = null;
 

@@ -1,0 +1,16 @@
+{
+  "appId": "app.antefy.mobile",
+  "appName": "Antefy",
+  "webDir": "www",
+  "appendUserAgent": "AntefyApp",
+  "backgroundColor": "#09090b",
+  "server": {
+    "url": "https://spot-clone-two.vercel.app",
+    "allowNavigation": [
+      "spot-clone-two.vercel.app",
+      "accounts.spotify.com",
+      "*.spotify.com",
+      "*.scdn.co"
+    ]
+  }
+}

@@ -132,6 +132,8 @@ const WEB_STATUS = {
 
 function ThisComputer({ webPlayer, active, onSelect }) {
 	const { status, message } = webPlayer;
+	// Native app that can't play audio itself: only real Spotify devices are offered.
+	if (status === 'disabled') return null;
 	if (status === 'needs-reauth') {
 		return (
 			<div className="mx-1 rounded-lg bg-hover/60 p-3">

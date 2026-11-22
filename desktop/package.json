@@ -1,0 +1,35 @@
+{
+  "name": "antefy-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Antefy for macOS: Electron shell around a bundled Next.js server",
+  "main": "main.js",
+  "scripts": {
+    "prepare-server": "node scripts/prepare-server.mjs",
+    "start": "electron .",
+    "dist": "npm run prepare-server && electron-builder --mac"
+  },
+  "build": {
+    "appId": "app.antefy.desktop",
+    "productName": "Antefy",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "../frontend/public/icon-512.png",
+      "target": [
+        "dmg"
+      ]
+    },
+    "afterPack": "scripts/after-pack.js"
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0"
+  }
+}

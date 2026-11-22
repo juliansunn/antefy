@@ -1,0 +1,19 @@
+{
+  "name": "antefy-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Antefy for iOS/Android: Capacitor shell around the hosted web app",
+  "scripts": {
+    "sync": "cap sync",
+    "ios": "cap open ios",
+    "android": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/ios": "^8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2"
+  }
+}

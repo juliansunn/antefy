@@ -37,7 +37,7 @@ export default function AppShell({ children }) {
 	}, [router.events, setSidebarOpen]);
 
 	return (
-		<div className="isolate flex h-[100dvh] flex-col overflow-hidden bg-bg">
+		<div className="isolate flex h-[100dvh] flex-col overflow-hidden bg-bg pt-[env(safe-area-inset-top)]">
 			<AuroraBackground />
 			<a
 				href="#main"
@@ -53,7 +53,7 @@ export default function AppShell({ children }) {
 						<Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm lg:hidden" />
 						<Dialog.Content
 							aria-describedby={undefined}
-							className="fixed inset-y-0 left-0 z-50 flex w-[85vw] max-w-xs animate-fade-in flex-col bg-bg p-2 shadow-2xl lg:hidden"
+							className="fixed inset-y-0 left-0 z-50 flex w-[85vw] max-w-xs animate-fade-in flex-col bg-bg p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] shadow-2xl lg:hidden"
 						>
 							<Dialog.Title className="sr-only">Navigation</Dialog.Title>
 							<Sidebar className="h-full" />
@@ -78,7 +78,11 @@ export default function AppShell({ children }) {
 			<VisualizerController />
 			<PlayerBar />
 
-			<nav aria-label="Primary" data-surface className="grid grid-cols-3 border-t border-line bg-surface lg:hidden">
+			<nav
+				aria-label="Primary"
+				data-surface
+				className="grid grid-cols-3 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
+			>
 				{MOBILE_TABS.map(({ href, label, icon: Icon }) => {
 					const active = href === '/' ? router.pathname === '/' : router.pathname.startsWith(href);
 					return (

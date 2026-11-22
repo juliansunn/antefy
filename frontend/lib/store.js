@@ -31,7 +31,7 @@ export const useUiStore = create((set) => ({
 	},
 
 	// Web Playback SDK device ("this browser").
-	// status: 'idle' | 'loading' | 'ready' | 'disabled' | 'unsupported' | 'needs-reauth' | 'premium-required' | 'error'
+	// status: 'idle' | 'loading' | 'ready' | 'unsupported' | 'needs-reauth' | 'premium-required' | 'error'
 	webPlayer: { status: 'idle', deviceId: null, message: null },
 	setWebPlayer: (patch) => set((s) => ({ webPlayer: { ...s.webPlayer, ...patch } })),
 

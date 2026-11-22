@@ -6,7 +6,6 @@ import { hasScopes } from '@/lib/scopes';
 import { useQueryClient } from '@tanstack/react-query';
 import { PLAYBACK_KEY } from '@/hooks/usePlayback';
 import { onWebPlayerStateChange, startWebPlayer } from '@/lib/webPlayer';
-import { canUseWebPlayer } from '@/lib/platform';
 
 /** Starts the in-browser Spotify device once signed in and keeps playback state fresh. */
 export default function WebPlayerBridge() {
@@ -20,10 +19,8 @@ export default function WebPlayerBridge() {
 
 	useEffect(() => {
 		if (status !== 'authenticated') return;
-		// Native app without in-app audio: playback goes through a Spotify app instead.
-		if (!canUseWebPlayer()) setWebPlayer({ status: 'disabled', deviceId: null });
 		// Sessions from before the `streaming` scope was requested can't use the SDK.
-		else if (missingScope) setWebPlayer({ status: 'needs-reauth', deviceId: null });
+		if (missingScope) setWebPlayer({ status: 'needs-reauth', deviceId: null });
 		else startWebPlayer();
 	}, [status, missingScope, setWebPlayer]);
 

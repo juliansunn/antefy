@@ -144,7 +144,7 @@ export default function PlayerBar() {
 
 	return (
 		<footer
-			className="relative z-40 border-t border-line bg-surface px-2 pb-[env(safe-area-inset-bottom)] sm:px-4"
+			className="relative z-40 border-t border-line bg-surface px-2 sm:px-4 lg:pb-[env(safe-area-inset-bottom)]"
 			aria-label="Player"
 			data-surface
 		>

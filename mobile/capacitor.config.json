@@ -7,10 +7,7 @@
   "server": {
     "url": "https://spot-clone-two.vercel.app",
     "allowNavigation": [
-      "spot-clone-two.vercel.app",
-      "accounts.spotify.com",
-      "*.spotify.com",
-      "*.scdn.co"
+      "*"
     ]
   }
 }

@@ -1,8 +1,9 @@
 # Antefy for iOS / Android
 
 Capacitor shell that loads the hosted web app (`server.url` in `capacitor.config.json`,
-currently https://spot-clone-two.vercel.app). It appends `AntefyApp` to the user agent so the web app
-hides the in-browser player; playback goes through the Spotify app on the device.
+currently https://spot-clone-two.vercel.app) and appends `AntefyApp` to the user agent. Music plays in-app
+through the Spotify Web Playback SDK ("This computer" in the device picker); background audio is enabled
+(`UIBackgroundModes: audio` + an `AVAudioSession` playback category in `AppDelegate.swift`).
 
 - `npm install && npx cap sync`
 - `npm run ios`: open in Xcode (pick a team under Signing to run on a device)

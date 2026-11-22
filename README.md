@@ -2,4 +2,4 @@
 
 A Spotify library browser and player built with Next.js. See [frontend/README.md](frontend/README.md).
 
-Native apps: [desktop/](desktop/README.md) (macOS, Electron) and [mobile/](mobile/README.md) (iOS/Android, Capacitor).
+Mobile app: [mobile/](mobile/README.md) (iOS/Android, Capacitor shell around the hosted site).

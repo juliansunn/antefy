@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 import * as spotify from '@/lib/spotify';
 import { useUiStore } from '@/lib/store';
-import { activateWebPlayer, runLocally } from '@/lib/webPlayer';
+import { WEB_PLAYER_NAME, activateWebPlayer, runLocally } from '@/lib/webPlayer';
 
 export const PLAYBACK_KEY = ['playback'];
 
@@ -147,7 +147,11 @@ export function usePlayerControls() {
 			if (!isNoDevice(e)) throw e;
 			const webDeviceId = useUiStore.getState().webPlayer.deviceId;
 			const devices = (await spotify.getDevices().catch(() => null))?.devices ?? [];
-			const usable = devices.filter((d) => d.id && !d.is_restricted);
+			// Skip other Antefy web players (stale tabs, or a native app that can't
+			// play): Spotify accepts the command, then playback silently stalls.
+			const usable = devices.filter(
+				(d) => d.id && !d.is_restricted && (d.name !== WEB_PLAYER_NAME || d.id === webDeviceId)
+			);
 			const targetId =
 				webDeviceId ??
 				usable.find((d) => d.id === lastDeviceId)?.id ??
